@@ -9,14 +9,13 @@ name: iOS
 
 on:
   push:
-    # A release branch builds once, from its `create` below.
-    branches: ['**', '!release/ios-v*']
+    branches: ['**']
     paths:
       - '.github/workflows/ios.yml'
       - 'app/**'
       - 'packages/**'
-  # Creating the tag or release branch (no paths filter: a new branch on an
-  # already-pushed commit changes no files). Other refs skip the jobs.
+  # Creating the tag or release branch, which the paths filter above misses
+  # when the commit was pushed before. Other refs skip the jobs.
   create:
   workflow_dispatch:
     inputs:
@@ -29,7 +28,8 @@ permissions:
 
 concurrency:
   group: ios-${{ github.ref }}
-  cancel-in-progress: true
+  # A release ref's runs queue: the first one publishes, the next finds it done.
+  cancel-in-progress: ${{ !startsWith(github.ref, 'refs/tags/ios-v') && !startsWith(github.ref, 'refs/heads/release/ios-v') }}
 
 env:
   FLUTTER_VERSION: 3.47.7
@@ -102,7 +102,7 @@ jobs:
   release:
     name: GitHub pre-release
     needs: ipa
-    if: github.event_name == 'create'
+    if: startsWith(github.ref, 'refs/tags/ios-v') || startsWith(github.ref, 'refs/heads/release/ios-v')
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     permissions:
@@ -121,6 +121,10 @@ jobs:
         run: |
           TAG=${REF#release/}
           [ "$TAG" = "ios-v$VERSION" ] || { echo "$REF does not match the built version $VERSION"; exit 1; }
+          if gh release view "$TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            echo "$TAG is already released; bump the version to publish again"
+            exit 0
+          fi
           cd dist
           sha256sum "$IPA" > SHA256SUMS
           cat > notes.md <<EOF
