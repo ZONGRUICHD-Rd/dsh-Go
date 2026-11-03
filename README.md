@@ -290,6 +290,16 @@ DSH_BETA_TOKEN_FILE= bash tooling/build-apk.sh -f x64 --keep-daemon
 DSH_BETA_TOKEN_FILE= bash tooling/build-apk.sh --dry-run -f all
 ```
 
+### iOS（实验性）
+
+`app/ios/` 是 iOS 27 版本，界面中的顶栏、输入条与弹层使用系统的 Liquid Glass。iOS 不能在手机上运行引擎，只连接远程主机（SSH、DSH Remote），首次启动不提供「本机」。
+
+[iOS 工作流](.github/workflows/ios.yml)在 `xcode-27` 运行器上构建**未签名**的 IPA，从该次运行的 Artifacts 下载；也可在 Actions 页手动运行。安装前需要自行签名（例如 AltStore、Sideloadly 或自己的开发者账号）。本地构建需要 macOS 与 Xcode 27：
+
+```bash
+(cd app && flutter build ios --release --no-codesign)
+```
+
 ## 目录
 
 | 路径 | 内容 |

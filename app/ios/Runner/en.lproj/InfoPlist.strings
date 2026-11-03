@@ -1,0 +1,6 @@
+"CFBundleDisplayName" = "DSH Go";
+"NSCameraUsageDescription" = "Take photos to send to DSH.";
+"NSLocalNetworkUsageDescription" = "Connect to DSH on a computer or server on the same local network.";
+"NSMicrophoneUsageDescription" = "Record voice messages for DSH.";
+"NSPhotoLibraryAddUsageDescription" = "Save images DSH made to your photo library.";
+"NSPhotoLibraryUsageDescription" = "Choose photos to send to DSH.";

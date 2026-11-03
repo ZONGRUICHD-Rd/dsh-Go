@@ -1,0 +1,6 @@
+"CFBundleDisplayName" = "DSH Go";
+"NSCameraUsageDescription" = "拍照发给 DSH。";
+"NSLocalNetworkUsageDescription" = "连接同一局域网里电脑或服务器上的 DSH。";
+"NSMicrophoneUsageDescription" = "录制语音消息发给 DSH。";
+"NSPhotoLibraryAddUsageDescription" = "把 DSH 生成的图片保存到相册。";
+"NSPhotoLibraryUsageDescription" = "从相册选择图片发给 DSH。";

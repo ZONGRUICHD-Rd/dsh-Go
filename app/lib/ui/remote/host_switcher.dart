@@ -5,6 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../l10n/l10n.dart';
 import '../../runtime/local_footprint.dart';
+import '../../runtime/local_runtime_support.dart';
 import '../../runtime/runtime_state.dart';
 import '../../state/connection_state.dart';
 import '../../state/hosts_state.dart';
@@ -115,37 +116,40 @@ class HostSheet extends ConsumerWidget {
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
               SheetTitleBar(l10n.remoteSwitchHost),
-              SheetGroup(
-                margin: const EdgeInsets.fromLTRB(SheetTitleBar.inset, 0, SheetTitleBar.inset, 12),
-                children: [
-                  _HostRow(
-                    host: HostRef.local,
-                    title: l10n.commonThisPhone,
-                    subtitle: l10n.remoteThisPhoneDsh,
-                    active: active.isLocal,
-                    onTap: localMissing ? installLocal : () => pick(HostRef.local),
-                  ),
-                  for (final h in ssh)
-                    _HostRow(
-                      host: HostRef.ssh(h.id),
-                      title: h.name,
-                      subtitle: 'SSH · ${h.address}',
-                      active: active == HostRef.ssh(h.id),
-                      onTap: () => pick(HostRef.ssh(h.id)),
-                    ),
-                  for (final h in relayHosts)
-                    _HostRow(
-                      host: HostRef.relay(h.id, name: h.name),
-                      title: h.name,
-                      subtitle: h.platform == null
-                          ? l10n.remoteRemoteLabel
-                          : l10n.remoteRemotePlatform(RelayHost.platformLabel(h.platform!)),
-                      active: active == HostRef.relay(h.id),
-                      relay: h,
-                      onTap: () => pick(HostRef.relay(h.id, name: h.name)),
-                    ),
-                ],
-              ),
+              if (localRuntimeSupported || ssh.isNotEmpty || relayHosts.isNotEmpty)
+                SheetGroup(
+                  margin: const EdgeInsets.fromLTRB(SheetTitleBar.inset, 0, SheetTitleBar.inset, 12),
+                  children: [
+                    // iOS has no on-device runtime to install or switch to.
+                    if (localRuntimeSupported)
+                      _HostRow(
+                        host: HostRef.local,
+                        title: l10n.commonThisPhone,
+                        subtitle: l10n.remoteThisPhoneDsh,
+                        active: active.isLocal,
+                        onTap: localMissing ? installLocal : () => pick(HostRef.local),
+                      ),
+                    for (final h in ssh)
+                      _HostRow(
+                        host: HostRef.ssh(h.id),
+                        title: h.name,
+                        subtitle: 'SSH · ${h.address}',
+                        active: active == HostRef.ssh(h.id),
+                        onTap: () => pick(HostRef.ssh(h.id)),
+                      ),
+                    for (final h in relayHosts)
+                      _HostRow(
+                        host: HostRef.relay(h.id, name: h.name),
+                        title: h.name,
+                        subtitle: h.platform == null
+                            ? l10n.remoteRemoteLabel
+                            : l10n.remoteRemotePlatform(RelayHost.platformLabel(h.platform!)),
+                        active: active == HostRef.relay(h.id),
+                        relay: h,
+                        onTap: () => pick(HostRef.relay(h.id, name: h.name)),
+                      ),
+                  ],
+                ),
               if (relayHosts.length > 1)
                 Padding(
                   padding: const EdgeInsets.fromLTRB(SheetTitleBar.inset + 8, 0, SheetTitleBar.inset + 8, 12),

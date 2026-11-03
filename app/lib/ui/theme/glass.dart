@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 
 import '../common/ui_trace.dart';
 
+import 'liquid_glass.dart';
 import 'shapes.dart';
 import 'surfaces.dart';
 
@@ -27,6 +28,8 @@ import 'surfaces.dart';
 ///   `BackdropGroup`,并传 [grouped] = true,引擎只采一次背景。
 /// - 模糊用 `ImageFilterConfig.blur(bounded: true)`:采样不越出形状边界,
 ///   边缘不会被外面的颜色"渗"进来(iOS 同款)。
+/// - iOS:要真模糊的玻璃改用系统的 Liquid Glass([LiquidGlass],
+///   `UIGlassEffect`),填充、描边与投影由系统材质自己画;降级规则不变。
 /// - 降级:主题里 `DshSurfaces.blurEnabled == false`(设置"减少透明效果"/
 ///   低端机)或系统高对比度时,不创建 `BackdropFilter`,改用近乎不透明的
 ///   `fallbackFill` —— 观感是"磨砂纸",可读性不降。
@@ -115,6 +118,15 @@ class GlassSurface extends StatelessWidget {
       content = Material(
         type: MaterialType.transparency,
         child: InkWell(customBorder: shape, onTap: onTap, onLongPress: onLongPress, child: content),
+      );
+    }
+
+    if (useBlur && LiquidGlass.supported) {
+      return LiquidGlass(
+        dark: Theme.of(context).brightness == Brightness.dark,
+        capsule: circle || _isStadium,
+        borderRadius: _radius.resolve(textDirection),
+        child: content,
       );
     }
 

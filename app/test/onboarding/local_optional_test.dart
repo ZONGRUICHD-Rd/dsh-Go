@@ -6,6 +6,7 @@ import 'dart:convert';
 
 import 'package:dsh_app/remote/secret_store.dart';
 import 'package:dsh_app/runtime/local_footprint.dart';
+import 'package:dsh_app/runtime/local_runtime_support.dart';
 import 'package:dsh_app/runtime/runtime_bridge.dart';
 import 'package:dsh_app/runtime/runtime_state.dart';
 import 'package:dsh_app/state/account_state.dart';
@@ -215,6 +216,20 @@ void main() {
       await pump(tester, phone: fullPhone, onRemote: () {});
       expect(find.text('存储空间不足，需要约 900 MB'), findsOneWidget);
       expect(tester.getSemantics(find.byKey(_remote)), isSemantics(isSelected: true));
+    });
+
+    testWidgets('iOS: the remote host is the one card, chosen and not 推荐', (tester) async {
+      debugLocalRuntimeSupported = false;
+      addTearDown(() => debugLocalRuntimeSupported = null);
+      var remote = 0;
+      final (runtime, _) = await pump(tester, onRemote: () => remote++);
+      expect(find.byKey(_local), findsNothing);
+      expect(tester.getSemantics(find.byKey(_remote)), isSemantics(isSelected: true));
+      expect(find.text('推荐'), findsNothing);
+      await tester.tap(find.widgetWithText(FilledButton, '继续'));
+      await tester.pump();
+      expect(remote, 1);
+      expect(runtime.calls, isEmpty);
     });
 
     testWidgets('installing clears a past 「远程主机」', (tester) async {
@@ -582,6 +597,46 @@ void main() {
       final container = ProviderScope.containerOf(tester.element(find.byType(LocalInstallPage)));
       // Not switched until it is installed.
       expect(container.read(activeHostProvider), HostRef.ssh(sampleSsh.id));
+    });
+
+    testWidgets('iOS: the host list has no 本机 row', (tester) async {
+      debugLocalRuntimeSupported = false;
+      addTearDown(() => debugLocalRuntimeSupported = null);
+      SharedPreferences.setMockInitialValues({
+        HostsController.prefsKey: jsonEncode([sampleSsh.toJson()]),
+      });
+      usePhoneSurface(tester);
+      await tester.pumpWidget(
+        goldenApp(
+          home: Builder(
+            builder: (context) => Scaffold(
+              body: Center(
+                child: TextButton(
+                  onPressed: () => showHostSheet(context, onManage: () {}),
+                  child: const Text('open'),
+                ),
+              ),
+            ),
+          ),
+          brightness: Brightness.light,
+          overrides: [
+            localRuntimeProvider.overrideWith(
+              () => RecordingLocalRuntime(const LocalRuntimeState(loaded: true, status: missingStatus)),
+            ),
+            secretStoreProvider.overrideWithValue(MemorySecretStore()),
+            relayBackendProvider.overrideWithValue(FakeRelayBackend()),
+            networkKicksProvider.overrideWithValue(const Stream.empty()),
+            hostLinkStatusProvider.overrideWith((ref, host) => Stream.value(HostLinkStatus.idle)),
+            footprint(roomyPhone),
+          ],
+        ),
+      );
+      await tester.pump();
+      await tester.tap(find.text('open'));
+      await _frames(tester, 6);
+      expect(find.byType(HostSheet), findsOneWidget);
+      expect(find.text('这台手机上的 DSH'), findsNothing);
+      expect(find.text('SSH · ${sampleSsh.address}'), findsOneWidget);
     });
 
     testWidgets('drawer: the empty list offers the install', (tester) async {

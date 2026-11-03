@@ -1,0 +1,82 @@
+# The iOS app as an unsigned IPA (app/ios, iOS 27 + Liquid Glass). Sign it
+# yourself before installing (e.g. AltStore, Sideloadly, or your own team's
+# `codesign`); this workflow holds no Apple certificates or profiles.
+name: iOS
+
+on:
+  push:
+    paths:
+      - '.github/workflows/ios.yml'
+      - 'app/**'
+      - 'packages/**'
+  workflow_dispatch:
+    inputs:
+      build-name:
+        description: 'Version name (CFBundleShortVersionString); empty = pubspec.yaml'
+        required: false
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ios-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  FLUTTER_VERSION: 3.47.7
+  TZ: Asia/Shanghai
+
+jobs:
+  ipa:
+    name: Unsigned IPA
+    # Xcode 27 with the iOS 27 SDK, Apple Silicon.
+    runs-on: xcode-27
+    timeout-minutes: 60
+    defaults:
+      run:
+        working-directory: app
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+      - uses: subosito/flutter-action@1a449444c387b1966244ae4d4f8c696479add0b2 # v2
+        with:
+          flutter-version: ${{ env.FLUTTER_VERSION }}
+          channel: stable
+          cache: true
+      - name: Toolchain
+        run: |
+          xcodebuild -version
+          echo "iOS SDK $(xcrun --sdk iphoneos --show-sdk-version)"
+          flutter --version
+      - run: flutter pub get --enforce-lockfile
+      - name: Build Runner.app without signing
+        env:
+          BUILD_NAME: ${{ inputs.build-name }}
+        run: |
+          # The build minute, the same sequence as the APK's versionCode (docs/release.md「构建号」).
+          number=$(python3 ../tooling/build_number.py)
+          args=(--release --no-codesign --build-number "$number")
+          if [ -n "$BUILD_NAME" ]; then args+=(--build-name "$BUILD_NAME"); fi
+          flutter build ios "${args[@]}"
+      - name: Package the IPA
+        id: ipa
+        run: |
+          app=build/ios/iphoneos/Runner.app
+          version=$(/usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' "$app/Info.plist")
+          number=$(/usr/libexec/PlistBuddy -c 'Print :CFBundleVersion' "$app/Info.plist")
+          minimum=$(/usr/libexec/PlistBuddy -c 'Print :MinimumOSVersion' "$app/Info.plist")
+          echo "Runner.app $version ($number), MinimumOSVersion $minimum"
+          stage="$RUNNER_TEMP/ipa"
+          mkdir -p "$stage/Payload"
+          cp -R "$app" "$stage/Payload/"
+          name="dsh-go-$version-$number-ios-unsigned.ipa"
+          (cd "$stage" && zip -qry "$name" Payload)
+          echo "path=$stage/$name" >> "$GITHUB_OUTPUT"
+          echo "name=$name" >> "$GITHUB_OUTPUT"
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: ${{ steps.ipa.outputs.name }}
+          path: ${{ steps.ipa.outputs.path }}
+          if-no-files-found: error
+          retention-days: 30

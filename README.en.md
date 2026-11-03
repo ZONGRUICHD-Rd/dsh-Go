@@ -290,6 +290,16 @@ To inspect APK build commands without building:
 DSH_BETA_TOKEN_FILE= bash tooling/build-apk.sh --dry-run -f all
 ```
 
+### iOS (experimental)
+
+`app/ios/` is the iOS 27 app; its top bars, composer and sheets use the system's Liquid Glass. iOS cannot run the engine on the phone, so the app connects to remote hosts only (SSH, DSH Remote), and first run offers no "This phone".
+
+The [iOS workflow](.github/workflows/ios.yml) builds an **unsigned** IPA on the `xcode-27` runner; download it from that run's Artifacts, or run the workflow by hand from the Actions page. Sign it yourself before installing (for example with AltStore, Sideloadly or your own developer account). A local build needs macOS and Xcode 27:
+
+```bash
+(cd app && flutter build ios --release --no-codesign)
+```
+
 ## Repository layout
 
 | Path | Contents |
