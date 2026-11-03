@@ -1,10 +1,16 @@
 # The iOS app as an unsigned IPA (app/ios, iOS 27 + Liquid Glass). Sign it
 # yourself before installing (e.g. AltStore, Sideloadly, or your own team's
 # `codesign`); this workflow holds no Apple certificates or profiles.
+#
+# A tag `ios-v<version>` (e.g. ios-v1.0.9) builds that version and publishes
+# it as a GitHub pre-release with the IPA and its SHA-256 attached.
 name: iOS
 
 on:
   push:
+    branches: ['**']
+    tags: ['ios-v*']
+    # Not evaluated for tags: a tag always builds.
     paths:
       - '.github/workflows/ios.yml'
       - 'app/**'
@@ -32,6 +38,9 @@ jobs:
     # Xcode 27 with the iOS 27 SDK, Apple Silicon.
     runs-on: xcode-27
     timeout-minutes: 60
+    outputs:
+      name: ${{ steps.ipa.outputs.name }}
+      version: ${{ steps.ipa.outputs.version }}
     defaults:
       run:
         working-directory: app
@@ -52,8 +61,9 @@ jobs:
       - run: flutter pub get --enforce-lockfile
       - name: Build Runner.app without signing
         env:
-          BUILD_NAME: ${{ inputs.build-name }}
+          BUILD_NAME: ${{ startsWith(github.ref, 'refs/tags/ios-v') && github.ref_name || inputs.build-name }}
         run: |
+          BUILD_NAME=${BUILD_NAME#ios-v}
           # The build minute, the same sequence as the APK's versionCode (docs/release.md「构建号」).
           number=$(python3 ../tooling/build_number.py)
           args=(--release --no-codesign --build-number "$number")
@@ -74,9 +84,54 @@ jobs:
           (cd "$stage" && zip -qry "$name" Payload)
           echo "path=$stage/$name" >> "$GITHUB_OUTPUT"
           echo "name=$name" >> "$GITHUB_OUTPUT"
+          echo "version=$version" >> "$GITHUB_OUTPUT"
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: ${{ steps.ipa.outputs.name }}
           path: ${{ steps.ipa.outputs.path }}
           if-no-files-found: error
           retention-days: 30
+
+  release:
+    name: GitHub pre-release
+    needs: ipa
+    if: startsWith(github.ref, 'refs/tags/ios-v')
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: ${{ needs.ipa.outputs.name }}
+          path: dist
+      - name: Publish
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ github.ref_name }}
+          VERSION: ${{ needs.ipa.outputs.version }}
+          IPA: ${{ needs.ipa.outputs.name }}
+        run: |
+          [ "$TAG" = "ios-v$VERSION" ] || { echo "tag $TAG does not match the built version $VERSION"; exit 1; }
+          cd dist
+          sha256sum "$IPA" > SHA256SUMS
+          cat > notes.md <<EOF
+          DSH Go $VERSION for iOS 27: an **unsigned** IPA, built by [this run]($GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID).
+
+          - Sign it before installing (AltStore, Sideloadly, or your own developer account).
+          - Connects to remote hosts only (SSH, DSH Remote): iOS cannot run the engine on the phone.
+          - Top bars, composer and sheets use the system's Liquid Glass.
+          - Android-only features (phone control, notifications, voice, in-app updates) are not there yet.
+
+          ---
+
+          DSH Go $VERSION iOS 27 版：**未签名** IPA，由[这次运行]($GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID)构建。
+
+          - 安装前需自行签名（AltStore、Sideloadly 或自己的开发者账号）。
+          - 只连接远程主机（SSH、DSH Remote）：iOS 不能在手机上运行引擎。
+          - 顶栏、输入条与弹层使用系统的 Liquid Glass。
+          - Android 专属功能（手机操控、通知、语音、应用内更新）暂未提供。
+          EOF
+          gh release create "$TAG" "$IPA" SHA256SUMS \
+            --repo "$GITHUB_REPOSITORY" --verify-tag --prerelease \
+            --title "DSH Go $VERSION (iOS)" --notes-file notes.md
