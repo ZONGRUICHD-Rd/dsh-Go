@@ -9,13 +9,15 @@ name: iOS
 
 on:
   push:
-    branches: ['**']
-    tags: ['ios-v*']
-    # Not evaluated for tags: a tag always builds.
+    # A release branch builds once, from its `create` below.
+    branches: ['**', '!release/ios-v*']
     paths:
       - '.github/workflows/ios.yml'
       - 'app/**'
       - 'packages/**'
+  # Creating the tag or release branch (no paths filter: a new branch on an
+  # already-pushed commit changes no files). Other refs skip the jobs.
+  create:
   workflow_dispatch:
     inputs:
       build-name:
@@ -37,6 +39,9 @@ jobs:
   ipa:
     name: Unsigned IPA
     # Xcode 27 with the iOS 27 SDK, Apple Silicon.
+    if: >-
+      github.event_name != 'create' ||
+      startsWith(github.ref, 'refs/tags/ios-v') || startsWith(github.ref, 'refs/heads/release/ios-v')
     runs-on: xcode-27
     timeout-minutes: 60
     outputs:
@@ -97,7 +102,7 @@ jobs:
   release:
     name: GitHub pre-release
     needs: ipa
-    if: startsWith(github.ref, 'refs/tags/ios-v') || startsWith(github.ref, 'refs/heads/release/ios-v')
+    if: github.event_name == 'create'
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     permissions:
