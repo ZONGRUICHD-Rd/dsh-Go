@@ -2,8 +2,9 @@
 # yourself before installing (e.g. AltStore, Sideloadly, or your own team's
 # `codesign`); this workflow holds no Apple certificates or profiles.
 #
-# A tag `ios-v<version>` (e.g. ios-v1.0.9) builds that version and publishes
-# it as a GitHub pre-release with the IPA and its SHA-256 attached.
+# A tag `ios-v<version>` (e.g. ios-v1.0.9), or a branch `release/ios-v<version>`
+# where tags can't be pushed, builds that version and publishes it as a GitHub
+# pre-release, tag `ios-v<version>`, with the IPA and its SHA-256 attached.
 name: iOS
 
 on:
@@ -61,8 +62,9 @@ jobs:
       - run: flutter pub get --enforce-lockfile
       - name: Build Runner.app without signing
         env:
-          BUILD_NAME: ${{ startsWith(github.ref, 'refs/tags/ios-v') && github.ref_name || inputs.build-name }}
+          BUILD_NAME: ${{ (startsWith(github.ref, 'refs/tags/ios-v') || startsWith(github.ref, 'refs/heads/release/ios-v')) && github.ref_name || inputs.build-name }}
         run: |
+          BUILD_NAME=${BUILD_NAME#release/}
           BUILD_NAME=${BUILD_NAME#ios-v}
           # The build minute, the same sequence as the APK's versionCode (docs/release.md「构建号」).
           number=$(python3 ../tooling/build_number.py)
@@ -95,7 +97,7 @@ jobs:
   release:
     name: GitHub pre-release
     needs: ipa
-    if: startsWith(github.ref, 'refs/tags/ios-v')
+    if: startsWith(github.ref, 'refs/tags/ios-v') || startsWith(github.ref, 'refs/heads/release/ios-v')
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     permissions:
@@ -108,11 +110,12 @@ jobs:
       - name: Publish
         env:
           GH_TOKEN: ${{ github.token }}
-          TAG: ${{ github.ref_name }}
+          REF: ${{ github.ref_name }}
           VERSION: ${{ needs.ipa.outputs.version }}
           IPA: ${{ needs.ipa.outputs.name }}
         run: |
-          [ "$TAG" = "ios-v$VERSION" ] || { echo "tag $TAG does not match the built version $VERSION"; exit 1; }
+          TAG=${REF#release/}
+          [ "$TAG" = "ios-v$VERSION" ] || { echo "$REF does not match the built version $VERSION"; exit 1; }
           cd dist
           sha256sum "$IPA" > SHA256SUMS
           cat > notes.md <<EOF
@@ -133,5 +136,5 @@ jobs:
           - Android 专属功能（手机操控、通知、语音、应用内更新）暂未提供。
           EOF
           gh release create "$TAG" "$IPA" SHA256SUMS \
-            --repo "$GITHUB_REPOSITORY" --verify-tag --prerelease \
+            --repo "$GITHUB_REPOSITORY" --target "$GITHUB_SHA" --prerelease \
             --title "DSH Go $VERSION (iOS)" --notes-file notes.md
